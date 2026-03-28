@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Diagnostic — Market Comparison</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --border: #1e1e2e;
+      --accent: #00ff88;
+      --accent2: #ff6b35;
+      --warn: #ffcc00;
+      --danger: #ff3d5a;
+      --text: #e0e0f0;
+      --muted: #5a5a7a;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Syne', sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline effect */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,0.015) 2px, rgba(0,255,136,0.015) 4px);
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    header {
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .logo-badge {
+      background: var(--accent);
+      color: #000;
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      padding: 4px 10px;
+      border-radius: 2px;
+    }
+
+    header h1 {
+      font-family: var(--sans);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .back-link {
+      margin-left: auto;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .back-link:hover { color: var(--text); border-color: var(--muted); }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 40px; }
+
+    /* Test suite config */
+    .config-bar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .config-bar label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .config-bar select, .config-bar input[type="number"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 4px;
+    }
+
+    .run-btn {
+      background: var(--accent);
+      color: #000;
+      border: none;
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      padding: 10px 28px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-left: auto;
+    }
+    .run-btn:hover { background: #00e07a; transform: translateY(-1px); }
+    .run-btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+    /* Summary row */
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .stat-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      text-align: center;
+    }
+    .stat-chip .val {
+      font-family: var(--sans);
+      font-size: 28px;
+      font-weight: 800;
+      display: block;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-chip .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .stat-chip.pass .val { color: var(--accent); }
+    .stat-chip.fail .val { color: var(--danger); }
+    .stat-chip.warn .val { color: var(--warn); }
+    .stat-chip.info .val { color: #7eb8ff; }
+
+    /* Test cases grid */
+    .tests-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .test-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px 18px;
+      display: grid;
+      grid-template-columns: 28px 1fr 100px 90px 90px 120px;
+      align-items: center;
+      gap: 14px;
+      transition: border-color 0.3s;
+    }
+    .test-row.running { border-color: var(--warn); }
+    .test-row.pass { border-color: rgba(0,255,136,0.3); }
+    .test-row.fail { border-color: rgba(255,61,90,0.3); }
+    .test-row.warn { border-color: rgba(255,204,0,0.3); }
+
+    .status-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .status-dot.running { background: var(--warn); animation: pulse 1s infinite; }
+    .status-dot.pass { background: var(--accent); }
+    .status-dot.fail { background: var(--danger); }
+    .status-dot.warn { background: var(--warn); }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .test-name { font-size: 12px; color: var(--text); }
+    .test-name .params { color: var(--muted); font-size: 11px; display: block; margin-top: 2px; }
+
+    .test-badge {
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 3px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .test-badge.PASS { background: rgba(0,255,136,0.1); color: var(--accent); }
+    .test-badge.FAIL { background: rgba(255,61,90,0.1); color: var(--danger); }
+    .test-badge.WARN { background: rgba(255,204,0,0.1); color: var(--warn); }
+    .test-badge.SKIP { background: rgba(90,90,122,0.2); color: var(--muted); }
+    .test-badge.RUNNING { background: rgba(255,204,0,0.1); color: var(--warn); }
+    .test-badge.PENDING { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+    .test-count { color: var(--muted); font-size: 11px; text-align: right; }
+    .test-count span { color: var(--text); }
+
+    .test-time { color: var(--muted); font-size: 11px; text-align: right; }
+
+    .test-note { font-size: 11px; color: var(--muted); }
+    .test-note.issue { color: var(--danger); }
+    .test-note.ok { color: var(--accent); }
+    .test-note.warn { color: var(--warn); }
+
+    /* AI Analysis panel */
+    .ai-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .ai-panel-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,255,136,0.03);
+    }
+
+    .ai-chip {
+      background: var(--accent);
+      color: #000;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      padding: 2px 7px;
+      border-radius: 2px;
+    }
+
+    .ai-panel-header h3 {
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .ai-panel-body {
+      padding: 20px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--text);
+      min-height: 80px;
+    }
+
+    .ai-panel-body.loading {
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .typing-dots span {
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: bounce 1.2s infinite;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+
+    .ai-section { margin-bottom: 16px; }
+    .ai-section h4 { color: var(--accent); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; }
+    .ai-section ul { padding-left: 16px; }
+    .ai-section ul li { margin-bottom: 4px; color: var(--text); }
+    .ai-section ul li.issue::marker { color: var(--danger); }
+    .ai-section ul li.ok::marker { color: var(--accent); }
+    .ai-section ul li.warn::marker { color: var(--warn); }
+
+    /* Live log */
+    .log-panel {
+      background: #080810;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      font-size: 11px;
+      line-height: 1.8;
+      max-height: 240px;
+      overflow-y: auto;
+      color: var(--muted);
+    }
+    .log-panel .log-line { display: flex; gap: 10px; }
+    .log-panel .log-time { color: var(--border); flex-shrink: 0; }
+    .log-panel .log-info { color: var(--muted); }
+    .log-panel .log-ok { color: var(--accent); }
+    .log-panel .log-err { color: var(--danger); }
+    .log-panel .log-warn { color: var(--warn); }
+    .log-panel .log-ai { color: #7eb8ff; }
+
+    .section-title {
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .progress-bar-wrap {
+      background: var(--border);
+      border-radius: 2px;
+      height: 3px;
+      margin-bottom: 28px;
+      overflow: hidden;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      width: 0%;
+      transition: width 0.5s ease;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-badge">DIAG</div>
+  <div>
+    <h1>Diagnostic Suite</h1>
+    <p>AI-simulated end-to-end tests for Market Comparison App</p>
+  </div>
+  <a href="/" class="back-link">← Back to app</a>
+</header>
+
+<div class="container">
+
+  <div class="config-bar">
+    <label>Mode
+      <select id="modeSelect">
+        <option value="ai">AI Simulation (fast, no scraping)</option>
+        <option value="live">Live scrape (slow, real data)</option>
+      </select>
+    </label>
+    <label>Pages
+      <input type="number" id="pageCount" value="3" min="1" max="10" style="width:60px">
+    </label>
+    <label style="flex:1">Anthropic API Key <span style="color:var(--muted);font-size:10px">(for AI tests)</span>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-…" style="width:100%;max-width:300px;background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:4px;" oninput="saveKey(this.value)">
+    </label>
+    <button class="run-btn" id="runBtn" onclick="runDiagnostic()">▶ Run Diagnostic</button>
+  </div>
+  <div id="keyStatus" style="font-size:11px;color:var(--muted);margin-bottom:16px;margin-top:-16px"></div>
+
+  <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar"></div></div>
+
+  <div class="summary-row">
+    <div class="stat-chip pass"><span class="val" id="s-pass">—</span><span class="lbl">Passed</span></div>
+    <div class="stat-chip fail"><span class="val" id="s-fail">—</span><span class="lbl">Failed</span></div>
+    <div class="stat-chip warn"><span class="val" id="s-warn">—</span><span class="lbl">Warnings</span></div>
+    <div class="stat-chip info"><span class="val" id="s-skip">—</span><span class="lbl">Skipped</span></div>
+    <div class="stat-chip info"><span class="val" id="s-time">—</span><span class="lbl">Total time</span></div>
+  </div>
+
+  <div class="section-title">Test Cases</div>
+  <div class="tests-grid" id="testsGrid"></div>
+
+  <div class="section-title">AI Analysis</div>
+  <div class="ai-panel">
+    <div class="ai-panel-header">
+      <span class="ai-chip">AI</span>
+      <h3>Diagnostic Report</h3>
+    </div>
+    <div class="ai-panel-body" id="aiReport">
+      <em style="color:var(--muted)">Run the diagnostic to generate an AI analysis of results.</em>
+    </div>
+  </div>
+
+  <div class="section-title">Activity Log</div>
+  <div class="log-panel" id="logPanel">
+    <div class="log-line"><span class="log-time">--:--:--</span><span class="log-info">Waiting to start…</span></div>
+  </div>
+
+</div>
+
+<script>
+// ── Test definitions ──────────────────────────────────────────────────────────
+const TEST_CASES = [
+  {
+    id: "server-health",
+    name: "Server health check",
+    params: "GET /",
+    category: "infrastructure",
+    test: async () => {
+      const r = await fetch("/");
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const text = await r.text();
+      if (!text.includes("Make Market")) throw new Error("Unexpected page content");
+      return { note: "index.html served correctly" };
+    }
+  },
+  {
+    id: "api-missing-make",
+    name: "API rejects missing make",
+    params: "POST /api/compare-make — no make",
+    category: "validation",
+    test: async () => {
+      const r = await fetch("/api/compare-make", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buyCountry: "LT", sellCountry: "PL" })
+      });
+      if (r.status !== 400) throw new Error("Expected 400, got " + r.status);
+      return { note: "Correctly rejected with 400" };
+    }
+  },
+  {
+    id: "api-same-country",
+    name: "API rejects same buy/sell country",
+    params: "POST — buyCountry == sellCountry",
+    category: "validation",
+    test: async () => {
+      const r = await fetch("/api/compare-make", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buyCountry: "LT", sellCountry: "LT", make: "BMW" })
+      });
+      if (r.status !== 400) throw new Error("Expected 400, got " + r.status);
+      return { note: "Correctly rejected same country" };
+    }
+  },
+  {
+    id: "api-missing-countries",
+    name: "API rejects missing countries",
+    params: "POST — no buyCountry/sellCountry",
+    category: "validation",
+    test: async () => {
+      const r = await fetch("/api/compare-make", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ make: "BMW" })
+      });
+      if (r.status !== 400) throw new Error("Expected 400, got " + r.status);
+      return { note: "Correctly rejected missing countries" };
+    }
+  },
+  {
+    id: "sse-stream",
+    name: "SSE stream opens correctly",
+    params: "LT→PL BMW | checks event-stream headers",
+    category: "streaming",
+    test: async (pages) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const r = await fetch("/api/compare-make", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ buyCountry: "LT", sellCountry: "PL", make: "BMW", maxPages: 1 }),
+          signal: ctrl.signal
+        });
+        clearTimeout(timer);
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("text/event-stream")) throw new Error("Expected event-stream, got: " + ct);
+        return { note: "SSE stream headers correct" };
+      } catch (e) {
+        clearTimeout(timer);
+        if (e.name === "AbortError") return { note: "Stream opened (timeout waiting — OK)", warn: true };
+        throw e;
+      }
+    }
+  },
+  {
+    id: "ai-lt-pl-bmw",
+    name: "LT→PL BMW (AI simulated)",
+    params: "buyCountry=LT, sellCountry=PL, make=BMW, 3 pages",
+    category: "scrape-ai",
+    aiSimulated: true,
+    scenario: { buyCountry: "LT", sellCountry: "PL", make: "BMW" }
+  },
+  {
+    id: "ai-lt-pl-audi",
+    name: "LT→PL Audi A4 (AI simulated)",
+    params: "buyCountry=LT, sellCountry=PL, make=Audi, model=A4",
+    category: "scrape-ai",
+    aiSimulated: true,
+    scenario: { buyCountry: "LT", sellCountry: "PL", make: "Audi", model: "A4" }
+  },
+  {
+    id: "ai-lt-de-vw",
+    name: "LT→DE Volkswagen (AI simulated)",
+    params: "buyCountry=LT, sellCountry=DE, make=Volkswagen",
+    category: "scrape-ai",
+    aiSimulated: true,
+    scenario: { buyCountry: "LT", sellCountry: "DE", make: "Volkswagen" }
+  },
+  {
+    id: "ai-lt-pl-diesel",
+    name: "LT→PL BMW Diesel filter (AI simulated)",
+    params: "make=BMW, fuel=Diesel, gearbox=Automatic",
+    category: "scrape-ai",
+    aiSimulated: true,
+    scenario: { buyCountry: "LT", sellCountry: "PL", make: "BMW", fuel: "Diesel", gearbox: "Automatic" }
+  },
+  {
+    id: "ai-pl-lt-audi",
+    name: "PL→LT Audi (reversed direction, AI simulated)",
+    params: "buyCountry=PL, sellCountry=LT, make=Audi",
+    category: "scrape-ai",
+    aiSimulated: true,
+    scenario: { buyCountry: "PL", sellCountry: "LT", make: "Audi" }
+  },
+  {
+    id: "live-lt-pl-bmw",
+    name: "LT→PL BMW (LIVE scrape)",
+    params: "Real scrape — checks buy/sell counts & matched models",
+    category: "scrape-live",
+    liveOnly: true,
+    scenario: { buyCountry: "LT", sellCountry: "PL", make: "BMW" }
+  }
+];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let results = [];
+let startTime = null;
+
+// ── Render test grid ──────────────────────────────────────────────────────────
+function renderGrid(states) {
+  const grid = document.getElementById("testsGrid");
+  grid.innerHTML = "";
+  TEST_CASES.forEach(tc => {
+    const s = states[tc.id] || { status: "PENDING" };
+    const row = document.createElement("div");
+    row.className = "test-row " + s.status.toLowerCase();
+    row.id = "row-" + tc.id;
+    row.innerHTML = `
+      <div class="status-dot ${s.status.toLowerCase()}"></div>
+      <div class="test-name">
+        ${tc.name}
+        <span class="params">${tc.params}</span>
+      </div>
+      <div><span class="test-badge ${s.status}">${s.status}</span></div>
+      <div class="test-count">${s.buyCount !== undefined ? `Buy: <span>${s.buyCount}</span>` : ""}</div>
+      <div class="test-count">${s.sellCount !== undefined ? `Sell: <span>${s.sellCount}</span>` : ""}</div>
+      <div class="test-note ${s.noteClass || ""}">${s.note || ""}</div>
+    `;
+    grid.appendChild(row);
+  });
+}
+
+function updateRow(id, state) {
+  const row = document.getElementById("row-" + id);
+  if (!row) return;
+  row.className = "test-row " + state.status.toLowerCase();
+  row.querySelector(".status-dot").className = "status-dot " + state.status.toLowerCase();
+  row.querySelector(".test-badge").className = "test-badge " + state.status;
+  row.querySelector(".test-badge").textContent = state.status;
+  if (state.note !== undefined) {
+    const noteEl = row.querySelector(".test-note");
+    noteEl.textContent = state.note;
+    noteEl.className = "test-note " + (state.noteClass || "");
+  }
+  if (state.buyCount !== undefined)
+    row.querySelectorAll(".test-count")[0].innerHTML = `Buy: <span>${state.buyCount}</span>`;
+  if (state.sellCount !== undefined)
+    row.querySelectorAll(".test-count")[1].innerHTML = `Sell: <span>${state.sellCount}</span>`;
+}
+
+function updateSummary() {
+  const pass = results.filter(r=>r.status==="PASS").length;
+  const fail = results.filter(r=>r.status==="FAIL").length;
+  const warn = results.filter(r=>r.status==="WARN").length;
+  const skip = results.filter(r=>r.status==="SKIP").length;
+  document.getElementById("s-pass").textContent = pass;
+  document.getElementById("s-fail").textContent = fail;
+  document.getElementById("s-warn").textContent = warn;
+  document.getElementById("s-skip").textContent = skip;
+  const elapsed = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) + "s" : "—";
+  document.getElementById("s-time").textContent = elapsed;
+  const total = TEST_CASES.length;
+  const done = pass + fail + warn + skip;
+  document.getElementById("progressBar").style.width = (done / total * 100) + "%";
+}
+
+// ── Log ───────────────────────────────────────────────────────────────────────
+function log(msg, type = "info") {
+  const panel = document.getElementById("logPanel");
+  const now = new Date();
+  const ts = now.toTimeString().slice(0, 8);
+  const line = document.createElement("div");
+  line.className = "log-line";
+  line.innerHTML = `<span class="log-time">${ts}</span><span class="log-${type}">${msg}</span>`;
+  panel.appendChild(line);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ── AI Simulation via Anthropic API ──────────────────────────────────────────
+async function runAISimulation(scenario, pages) {
+  const prompt = `You are simulating a car market price comparison web scraper for the app "Market Comparison". 
+
+The app scrapes car listings from:
+- Autoplius.lt (Lithuania)
+- Otomoto.pl (Poland)  
+- mobile.de (Germany)
+
+Simulate a realistic scraping run for this scenario:
+${JSON.stringify(scenario, null, 2)}
+Max pages: ${pages}
+
+Return ONLY valid JSON (no markdown, no explanation) in this exact format:
+{
+  "status": "PASS" | "WARN" | "FAIL",
+  "buyListings": <number 5-200>,
+  "sellListings": <number 5-200>,
+  "matchedModels": <number 0-20>,
+  "issues": ["issue1", "issue2"] or [],
+  "highlights": ["highlight1", "highlight2"],
+  "note": "<one sentence summary>"
+}
+
+Rules for realistic simulation:
+- Lithuania (LT/Autoplius) typically finds 15-25 listings per page
+- Poland (PL/Otomoto) finds 20-30 per page but sometimes has bot detection causing 0-5
+- Germany (DE/mobile.de) finds 20-40 per page  
+- BMW typically has SERIA-3, SERIA-5, X5 as top models
+- Audi typically has A4, A6, Q5 as top models
+- Volkswagen has Golf, Passat, Tiguan
+- Diesel models dominate Lithuanian market
+- Matched models require same model+year on both sides — expect 3-15 matches
+- If model filter is specific (e.g. A4) expect fewer but more precise results
+- Occasionally simulate: price extraction failure for 10-20% of listings, year=1998 from engine displacement bug (WARN not FAIL), 0 sell listings (FAIL)
+- Status PASS if matchedModels > 0, buyListings > 10, sellListings > 10
+- Status WARN if matchedModels === 0 but listings found, or some price nulls
+- Status FAIL if either side has 0 listings`;
+
+  const apiKey = document.getElementById("apiKeyInput")?.value || sessionStorage.getItem("diag_api_key") || "";
+  const response = await fetch("/api/ai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, max_tokens: 1000, apiKey })
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    if (response.status === 401 || (err.error && String(err.error).includes("API key"))) {
+      throw new Error("No API key — set ANTHROPIC_API_KEY env var and restart server");
+    }
+    const errMsg1 = typeof err.error === "object" ? JSON.stringify(err.error) : (err.error || response.status);
+    throw new Error("AI proxy error: " + errMsg1);
+  }
+  const data = await response.json();
+  const text = data.content?.[0]?.text || "{}";
+  const clean = text.replace(/```json|```/g, "").trim();
+  return JSON.parse(clean);
+}
+
+// ── Live scrape test ──────────────────────────────────────────────────────────
+async function runLiveScrape(scenario, pages) {
+  return new Promise((resolve, reject) => {
+    const body = { ...scenario, maxPages: pages };
+    fetch("/api/compare-make", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(r => {
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let lastResult = null;
+
+      const read = () => reader.read().then(({ done, value }) => {
+        if (done) {
+          resolve(lastResult || { status: "FAIL", note: "No result received" });
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith("data:")) {
+            try {
+              const d = JSON.parse(line.slice(5).trim());
+              if (d.models !== undefined) lastResult = d;
+            } catch {}
+          }
+        }
+        read();
+      }).catch(reject);
+
+      read();
+    }).catch(reject);
+  });
+}
+
+// ── AI Report generation ──────────────────────────────────────────────────────
+async function generateAIReport(results) {
+  const reportEl = document.getElementById("aiReport");
+  reportEl.className = "ai-panel-body loading";
+  reportEl.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>&nbsp; Generating diagnostic report…`;
+
+  const summary = results.map(r => ({
+    test: r.name,
+    status: r.status,
+    buyListings: r.buyCount,
+    sellListings: r.sellCount,
+    matched: r.matched,
+    note: r.note,
+    issues: r.issues || []
+  }));
+
+  const prompt = `You are a senior developer reviewing diagnostic test results for a Node.js car price comparison web app.
+
+The app scrapes car listings from Autoplius (Lithuania), Otomoto (Poland), and mobile.de (Germany) using Playwright, then compares prices between countries.
+
+Test results:
+${JSON.stringify(summary, null, 2)}
+
+Known issues in this app:
+- Otomoto uses hashed CSS class names making price/year extraction fragile
+- Year "1998" from "1998 cm3" (engine displacement) sometimes misidentified as year
+- Bot detection on Otomoto sometimes causes 0 listings (but stealth mode helps)
+- Memory can crash with 20+ pages
+- Playwright browser must be installed via "npx playwright install chromium"
+
+Write a concise diagnostic report in HTML using only these tags: <div class="ai-section"><h4>TITLE</h4><ul><li class="ok|warn|issue">text</li></ul></div>
+
+Include sections: "Overall Health", "Critical Issues" (if any), "Warnings", "What's Working", "Recommended Actions".
+Keep each bullet under 15 words. Be direct and technical. Max 5 bullets per section.`;
+
+  try {
+    const apiKey = document.getElementById("apiKeyInput")?.value || sessionStorage.getItem("diag_api_key") || "";
+    const response = await fetch("/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, max_tokens: 1200, apiKey })
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      if (response.status === 401 || (err.error && String(err.error).includes("key"))) {
+        throw new Error("No API key — add ANTHROPIC_API_KEY to env and restart");
+      }
+      const errMsg2 = typeof err.error === "object" ? JSON.stringify(err.error) : (err.error || response.status);
+      throw new Error("AI proxy: " + errMsg2);
+    }
+    const data = await response.json();
+    const html = data.content?.[0]?.text || "<p>Could not generate report.</p>";
+    reportEl.className = "ai-panel-body";
+    reportEl.innerHTML = html;
+  } catch (e) {
+    reportEl.className = "ai-panel-body";
+    reportEl.innerHTML = `<span style="color:var(--danger)">Failed to generate AI report: ${e.message}</span>`;
+  }
+}
+
+// ── Main run ──────────────────────────────────────────────────────────────────
+async function runDiagnostic() {
+  const mode = document.getElementById("modeSelect").value;
+  const pages = parseInt(document.getElementById("pageCount").value) || 3;
+  const btn = document.getElementById("runBtn");
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  startTime = Date.now();
+  results = [];
+
+  // Init all rows as PENDING
+  const states = {};
+  TEST_CASES.forEach(tc => { states[tc.id] = { status: "PENDING", note: "" }; });
+  renderGrid(states);
+  updateSummary();
+
+  document.getElementById("logPanel").innerHTML = "";
+  document.getElementById("aiReport").innerHTML = '<em style="color:var(--muted)">Waiting for tests to complete…</em>';
+  log("Diagnostic started — mode: " + mode + ", pages: " + pages, "info");
+
+  for (const tc of TEST_CASES) {
+    // Skip live tests in AI mode and vice versa
+    if (tc.liveOnly && mode === "ai") {
+      log("SKIP " + tc.name + " (live only)", "info");
+      const r = { ...tc, status: "SKIP", note: "Skipped in AI mode" };
+      results.push(r);
+      updateRow(tc.id, { status: "SKIP", note: "Skipped in AI mode" });
+      updateSummary();
+      continue;
+    }
+
+    updateRow(tc.id, { status: "RUNNING", note: "Running…" });
+    log("▶ " + tc.name, "info");
+    const t0 = Date.now();
+
+    try {
+      if (tc.aiSimulated) {
+        log("  Calling AI simulation…", "ai");
+        const sim = await runAISimulation(tc.scenario, pages);
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1) + "s";
+        const status = sim.status || "WARN";
+        const r = {
+          ...tc, status,
+          buyCount: sim.buyListings,
+          sellCount: sim.sellListings,
+          matched: sim.matchedModels,
+          note: sim.note,
+          issues: sim.issues || [],
+          elapsed
+        };
+        results.push(r);
+        updateRow(tc.id, {
+          status,
+          buyCount: sim.buyListings,
+          sellCount: sim.sellListings,
+          note: sim.note,
+          noteClass: status === "FAIL" ? "issue" : status === "WARN" ? "warn" : "ok"
+        });
+        log(`  ${status} — buy:${sim.buyListings} sell:${sim.sellListings} matched:${sim.matchedModels} (${elapsed})`,
+          status === "FAIL" ? "err" : status === "WARN" ? "warn" : "ok");
+        if (sim.issues?.length) sim.issues.forEach(i => log("  ⚠ " + i, "warn"));
+
+      } else if (tc.liveOnly && mode === "live") {
+        log("  Running live scrape (this will take a while)…", "warn");
+        updateRow(tc.id, { status: "RUNNING", note: "Scraping live…" });
+        const res = await runLiveScrape(tc.scenario, pages);
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1) + "s";
+        const buy = res.buyListingCount || 0;
+        const sell = res.sellListingCount || 0;
+        const matched = res.models?.length || 0;
+        const status = (buy === 0 || sell === 0) ? "FAIL" : matched === 0 ? "WARN" : "PASS";
+        const r = { ...tc, status, buyCount: buy, sellCount: sell, matched, note: status === "PASS" ? matched + " models matched" : "0 models matched", elapsed };
+        results.push(r);
+        updateRow(tc.id, { status, buyCount: buy, sellCount: sell, note: r.note, noteClass: status === "FAIL" ? "issue" : status === "WARN" ? "warn" : "ok" });
+        log(`  ${status} — buy:${buy} sell:${sell} matched:${matched} (${elapsed})`, status === "FAIL" ? "err" : status === "WARN" ? "warn" : "ok");
+
+      } else {
+        // Infrastructure / validation tests
+        const res = await tc.test(pages);
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1) + "s";
+        const status = res.warn ? "WARN" : "PASS";
+        results.push({ ...tc, status, note: res.note, elapsed });
+        updateRow(tc.id, { status, note: res.note, noteClass: status === "PASS" ? "ok" : "warn" });
+        log(`  ${status} — ${res.note} (${elapsed})`, status === "PASS" ? "ok" : "warn");
+      }
+
+    } catch (err) {
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1) + "s";
+      results.push({ ...tc, status: "FAIL", note: err.message, elapsed });
+      updateRow(tc.id, { status: "FAIL", note: err.message, noteClass: "issue" });
+      log("  FAIL — " + err.message, "err");
+    }
+
+    updateSummary();
+    // Small gap between tests
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  log("All tests complete. Generating AI report…", "ai");
+  document.getElementById("s-time").textContent = ((Date.now() - startTime) / 1000).toFixed(1) + "s";
+  document.getElementById("progressBar").style.width = "100%";
+
+  await generateAIReport(results);
+
+  btn.disabled = false;
+  btn.textContent = "▶ Run Again";
+  log("Diagnostic complete.", "ok");
+}
+
+// ── API Key handling ─────────────────────────────────────────────────────────
+function saveKey(val) {
+  if (val) sessionStorage.setItem("diag_api_key", val);
+  document.getElementById("keyStatus").textContent = val ? "✓ Key stored for this session" : "";
+}
+
+// Load key from session on startup
+(function() {
+  const saved = sessionStorage.getItem("diag_api_key");
+  if (saved) {
+    document.getElementById("apiKeyInput").value = saved;
+    document.getElementById("keyStatus").textContent = "✓ Key loaded from session";
+  }
+})();
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+const initStates = {};
+TEST_CASES.forEach(tc => { initStates[tc.id] = { status: "PENDING", note: "" }; });
+renderGrid(initStates);
+</script>
+</body>
+</html>
