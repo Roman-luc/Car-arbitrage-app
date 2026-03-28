@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Make Market Comparison</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <div class="hero-top">
+        <div>
+          <h1 data-i18n="appTitle">Make Market Comparison</h1>
+          <p data-i18n="appSubtitle">Choose a make like BMW and compare average prices for all detected models across two countries.</p>
+        </div>
+        <button id="langToggle" class="secondary lang-toggle" type="button">RU</button>
+      </div>
+    </header>
+
+    <div class="main-layout">
+      <!-- LEFT: form + results -->
+      <div class="left-col">
+        <section class="panel">
+          <div class="grid">
+            <label><span data-i18n="buyCountryLabel">Buy country</span><select id="buyCountry"></select></label>
+            <label><span data-i18n="sellCountryLabel">Sell country</span><select id="sellCountry"></select></label>
+            <label><span data-i18n="makeLabel">Make</span><input id="make" list="makeList" placeholder="BMW, Audi, Volkswagen…" data-i18n-placeholder="makePlaceholder" /><datalist id="makeList"></datalist></label>
+            <label><span data-i18n="modelLabel">Model (optional)</span><input id="model" placeholder="318, A4, Golf…" data-i18n-placeholder="modelPlaceholder" /></label>
+            <label><span data-i18n="yearLabel">Exact year (optional)</span><input id="year" type="number" min="1980" max="2035" /></label>
+            <label><span data-i18n="fuelLabel">Fuel</span><select id="fuel"><option value="" data-i18n="anyOption">Any</option><option>Diesel</option><option>Petrol</option><option>Hybrid</option><option>Electric</option></select></label>
+            <label><span data-i18n="gearboxLabel">Gearbox</span><select id="gearbox"><option value="" data-i18n="anyOption">Any</option><option>Manual</option><option>Automatic</option></select></label>
+            <label><span data-i18n="driveLabel">Drive</span><select id="drive"><option value="" data-i18n="anyOption">Any</option><option>FWD</option><option>RWD</option><option>AWD</option></select></label>
+            <label><span data-i18n="priceFromLabel">Price from (€)</span><input id="priceFrom" type="number" min="0" step="100" /></label>
+            <label><span data-i18n="priceToLabel">Price to (€)</span><input id="priceTo" type="number" min="0" step="100" /></label>
+            <label><span data-i18n="maxPagesLabel">Max pages per country</span><select id="maxPages"><option>10</option><option selected>20</option><option>30</option><option>50</option></select></label>
+            <label><span>Mode</span><select id="speedMode"><option value="fast">Fast</option><option value="balanced" selected>Balanced</option><option value="strict">Strict</option></select></label>
+            <label><span>Min listings per side</span><select id="minListings"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label>
+            <label><span>Transport (€)</span><input id="transportCost" type="number" min="0" step="50" value="0" /></label>
+            <label><span>Registration / tax (€)</span><input id="registrationCost" type="number" min="0" step="50" value="0" /></label>
+            <label><span>Fees / platform (€)</span><input id="feesCost" type="number" min="0" step="50" value="0" /></label>
+            <label><span>Repair buffer (€)</span><input id="repairCost" type="number" min="0" step="50" value="0" /></label>
+          </div>
+          <div class="actions">
+            <button id="scanBtn" data-i18n="compareBtn">Compare markets</button>
+            <button id="resetBtn" class="secondary" data-i18n="resetBtn">Reset</button>
+            <button id="saveSearchBtn" class="secondary" type="button">Save search</button>
+            <button id="exportBtn" class="secondary" type="button">Export CSV</button>
+          </div>
+          <div id="savedSearches" class="saved-searches"></div>
+          <p class="hint" data-i18n="hintText">Aggregates by model. Enter only a make to see all detected models across both markets.</p>
+        </section>
+
+        <section class="stats">
+          <div class="statCard"><strong id="buyCount">—</strong><span data-i18n="sampledBuy">buy listings</span></div>
+          <div class="statCard"><strong id="sellCount">—</strong><span data-i18n="sampledSell">sell listings</span></div>
+          <div class="statCard"><strong id="modelCount">—</strong><span data-i18n="matchedModels">matched models</span></div>
+          <div class="statCard"><strong id="statusTop">Ready</strong><span data-i18n="statusLabel">status</span></div>
+        </section>
+
+        <section class="panel">
+          <div id="errors" class="errors"></div>
+          <div class="tableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th data-i18n="thModel">Model</th>
+                  <th data-i18n="thBuyAvg">Buy avg</th>
+                  <th data-i18n="thSellAvg">Sell avg</th>
+                  <th data-i18n="thDifference">Difference</th>
+                  <th>Net</th>
+                  <th>Confidence</th>
+                  <th>Verified</th>
+                  <th data-i18n="thSpec">Typical spec</th>
+                  <th data-i18n="thLinks">Links</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="resultsBody">
+                <tr><td colspan="10" class="empty" data-i18n="runComparison">Run a comparison.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- RIGHT: live progress panel -->
+      <aside class="progress-panel" id="progressPanel">
+        <div class="progress-header">
+          <span class="progress-title" data-i18n="activityLog">Activity log</span>
+          <button class="progress-clear" id="clearLogBtn" title="Clear log">✕</button>
+        </div>
+        <div class="progress-body" id="progressLog">
+          <div class="log-idle" data-i18n="waitingToStart">Waiting to start…</div>
+        </div>
+        <div class="progress-footer" id="progressFooter"></div>
+      </aside>
+    </div>
+  </div>
+
+<script>
+const COUNTRIES = { LT: "Lithuania", DE: "Germany", PL: "Poland" };
+
+const I18N = {
+  en: {
+    appTitle: "Make Market Comparison",
+    appSubtitle: "Choose a make like BMW and compare average prices for all detected models across two countries.",
+    buyCountryLabel: "Buy country",
+    sellCountryLabel: "Sell country",
+    makeLabel: "Make",
+    makePlaceholder: "BMW, Audi, Volkswagen…",
+    modelLabel: "Model (optional)",
+    modelPlaceholder: "318, A4, Golf…",
+    yearLabel: "Exact year (optional)",
+    fuelLabel: "Fuel",
+    gearboxLabel: "Gearbox",
+    driveLabel: "Drive",
+    priceFromLabel: "Price from (€)",
+    priceToLabel: "Price to (€)",
+    maxPagesLabel: "Max pages per country",
+    compareBtn: "Compare markets",
+    compareBtnBusy: "Scanning…",
+    resetBtn: "Reset",
+    hintText: "Aggregates by model. Enter only a make to see all detected models across both markets.",
+    sampledBuy: "buy listings",
+    sampledSell: "sell listings",
+    matchedModels: "matched models",
+    statusLabel: "status",
+    activityLog: "Activity log",
+    waitingToStart: "Waiting to start…",
+    thModel: "Model",
+    thBuyAvg: "Buy avg",
+    thSellAvg: "Sell avg",
+    thDifference: "Difference",
+    thBuySample: "Buy sample #",
+    thSellSample: "Sell sample #",
+    thSpec: "Typical spec",
+    thLinks: "Links",
+    runComparison: "Run a comparison.",
+    anyOption: "Any",
+    statusReady: "Ready",
+    statusScanning: "Scanning",
+    statusDone: "Done ✓",
+    statusNoModels: "No models",
+    statusError: "Error",
+    statusInvalid: "Invalid",
+    statusMakeRequired: "Make required",
+    noMatchedModels: "No matched models found. Check the activity log for details.",
+    scanningPleaseWait: "Scanning, please wait…",
+    serverError: "Server error",
+    noResultReceived: "No result received from server.",
+    fetchError: "Fetch error:",
+    compareStart: "▶ Starting",
+    maxPagesShort: "max",
+    finished: "✓ Finished",
+    modelsMatched: "models matched",
+    buyLink: "Buy",
+    sellLink: "Sell",
+    doneFooter: "Done",
+    runningFooter: "Running…",
+    failedFooter: "Failed",
+    noResultFooter: "No result",
+    errorFooter: "Error",
+    doneSummary: (buy, sell, models) => `Done — ${buy} buy / ${sell} sell listings, ${models} models`,
+    finishedSummary: (buy, sell, models) => `✓ Finished: ${buy} buy, ${sell} sell, ${models} models matched`,
+    startSummary: (make, buy, sell, pages) => `▶ Starting: ${make} | ${buy} → ${sell} | max ${pages} pages`,
+    countriesDifferent: "Buy and sell countries must be different.",
+    makeRequired: "Make is required.",
+    logCleared: "Log cleared."
+  },
+  ru: {
+    appTitle: "Сравнение цен на автомобили",
+    appSubtitle: "Выберите марку, например BMW, и сравните средние цены по всем найденным моделям между двумя странами.",
+    buyCountryLabel: "Страна покупки",
+    sellCountryLabel: "Страна продажи",
+    makeLabel: "Марка",
+    makePlaceholder: "BMW, Audi, Volkswagen…",
+    modelLabel: "Модель (необязательно)",
+    modelPlaceholder: "318, A4, Golf…",
+    yearLabel: "Точный год (необязательно)",
+    fuelLabel: "Топливо",
+    gearboxLabel: "Коробка",
+    driveLabel: "Привод",
+    priceFromLabel: "Цена от (€)",
+    priceToLabel: "Цена до (€)",
+    maxPagesLabel: "Макс. страниц на страну",
+    compareBtn: "Сравнить рынки",
+    compareBtnBusy: "Сканирование…",
+    resetBtn: "Сброс",
+    hintText: "Сводит данные по моделям. Введите только марку, чтобы увидеть все найденные модели на двух рынках.",
+    sampledBuy: "найдено объявлений для покупки",
+    sampledSell: "найдено объявлений для продажи",
+    matchedModels: "совпавших моделей",
+    statusLabel: "статус",
+    activityLog: "Журнал активности",
+    waitingToStart: "Ожидание запуска…",
+    thModel: "Модель",
+    thBuyAvg: "Средняя покупка",
+    thSellAvg: "Средняя продажа",
+    thDifference: "Разница",
+    thBuySample: "Покупка #",
+    thSellSample: "Продажа #",
+    thSpec: "Типичная спецификация",
+    thLinks: "Ссылки",
+    runComparison: "Запустите сравнение.",
+    anyOption: "Любая",
+    statusReady: "Готово",
+    statusScanning: "Сканирование",
+    statusDone: "Готово ✓",
+    statusNoModels: "Нет моделей",
+    statusError: "Ошибка",
+    statusInvalid: "Неверно",
+    statusMakeRequired: "Нужна марка",
+    noMatchedModels: "Совпадающих моделей не найдено. Проверьте журнал активности.",
+    scanningPleaseWait: "Сканирование, пожалуйста подождите…",
+    serverError: "Ошибка сервера",
+    noResultReceived: "Нет результата от сервера.",
+    fetchError: "Ошибка запроса:",
+    compareStart: "▶ Старт",
+    maxPagesShort: "макс.",
+    finished: "✓ Готово",
+    modelsMatched: "моделей совпало",
+    buyLink: "Купить",
+    sellLink: "Продать",
+    doneFooter: "Готово",
+    runningFooter: "Выполняется…",
+    failedFooter: "Не удалось",
+    noResultFooter: "Нет результата",
+    errorFooter: "Ошибка",
+    doneSummary: (buy, sell, models) => `Готово — ${buy} покупка / ${sell} продажа, ${models} моделей`,
+    finishedSummary: (buy, sell, models) => `✓ Готово: ${buy} покупка, ${sell} продажа, ${models} моделей совпало`,
+    startSummary: (make, buy, sell, pages) => `▶ Старт: ${make} | ${buy} → ${sell} | макс. ${pages} страниц`,
+    countriesDifferent: "Страны покупки и продажи должны отличаться.",
+    makeRequired: "Нужно указать марку.",
+    logCleared: "Журнал очищен."
+  }
+};
+let currentLang = localStorage.getItem('marketLang') || 'en';
+function t(key){ return (I18N[currentLang] && I18N[currentLang][key]) || I18N.en[key] || key; }
+function setLanguage(lang){
+  currentLang = lang === 'ru' ? 'ru' : 'en';
+  localStorage.setItem('marketLang', currentLang);
+  document.documentElement.lang = currentLang === 'ru' ? 'ru' : 'en';
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    const key = node.getAttribute('data-i18n');
+    if (t(key)) node.textContent = t(key);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+    const key = node.getAttribute('data-i18n-placeholder');
+    if (t(key)) node.setAttribute('placeholder', t(key));
+  });
+  const btn = document.getElementById('langToggle');
+  if (btn) btn.textContent = currentLang === 'ru' ? 'EN' : 'RU';
+  document.title = t('appTitle');
+}
+const MAKES = ["Audi","BMW","Citroen","Ford","Honda","Hyundai","Kia","Mazda","Mercedes-Benz","Nissan","Opel","Peugeot","Renault","Seat","Skoda","Toyota","Volkswagen","Volvo"];
+
+const el = {
+  buyCountry:  document.getElementById("buyCountry"),
+  sellCountry: document.getElementById("sellCountry"),
+  make:        document.getElementById("make"),
+  model:       document.getElementById("model"),
+  year:        document.getElementById("year"),
+  fuel:        document.getElementById("fuel"),
+  gearbox:     document.getElementById("gearbox"),
+  drive:       document.getElementById("drive"),
+  priceFrom:   document.getElementById("priceFrom"),
+  priceTo:     document.getElementById("priceTo"),
+  maxPages:    document.getElementById("maxPages"),
+  scanBtn:     document.getElementById("scanBtn"),
+  resetBtn:    document.getElementById("resetBtn"),
+  resultsBody: document.getElementById("resultsBody"),
+  errors:      document.getElementById("errors"),
+  buyCount:    document.getElementById("buyCount"),
+  sellCount:   document.getElementById("sellCount"),
+  modelCount:  document.getElementById("modelCount"),
+  statusTop:   document.getElementById("statusTop"),
+  makeList:    document.getElementById("makeList"),
+  progressLog: document.getElementById("progressLog"),
+  progressFooter: document.getElementById("progressFooter"),
+  clearLogBtn: document.getElementById("clearLogBtn"),
+  langToggle: document.getElementById("langToggle"),
+  speedMode: document.getElementById("speedMode"),
+  minListings: document.getElementById("minListings"),
+  transportCost: document.getElementById("transportCost"),
+  registrationCost: document.getElementById("registrationCost"),
+  feesCost: document.getElementById("feesCost"),
+  repairCost: document.getElementById("repairCost"),
+  saveSearchBtn: document.getElementById("saveSearchBtn"),
+  exportBtn: document.getElementById("exportBtn"),
+  savedSearches: document.getElementById("savedSearches"),
+};
+
+let logCount = 0;
+let latestRows = [];
+const blacklistStoreKey = 'marketBlacklist';
+
+function money(v){ return "€" + Number(v || 0).toLocaleString("en-US", { maximumFractionDigits: 0 }); }
+function totalCosts(){
+  return ['transportCost','registrationCost','feesCost','repairCost'].reduce((sum,k)=>sum+Number(el[k].value||0),0);
+}
+function loadBlacklist(){ try { return JSON.parse(localStorage.getItem(blacklistStoreKey) || '[]'); } catch { return []; } }
+function saveBlacklist(v){ localStorage.setItem(blacklistStoreKey, JSON.stringify(v)); }
+function confidenceClass(v){ return v >= 80 ? 'good' : v >= 60 ? 'warn' : 'bad'; }
+function verifiedBadge(row){ return row.liveVerified ? '<span class="badge verified">Verified</span>' : (row.liveVerifiedBuy || row.liveVerifiedSell) ? '<span class="badge partial">Partial</span>' : '<span class="badge sampled">Sampled</span>'; }
+function rowKey(row){ return row.rowKey || `${row.model}|${row.repYear||''}|${row.repFuel||''}|${row.repGearbox||''}`; }
+
+
+function logLine(msg, cls){
+  // Remove idle placeholder
+  const idle = el.progressLog.querySelector(".log-idle");
+  if (idle) idle.remove();
+
+  logCount++;
+  const row = document.createElement("div");
+  row.className = "log-line" + (cls ? " " + cls : "");
+  const ts = new Date().toLocaleTimeString("en-GB", { hour12: false });
+  row.innerHTML = `<span class="log-ts">${ts}</span><span class="log-msg">${msg}</span>`;
+  el.progressLog.appendChild(row);
+  // Auto-scroll to bottom
+  el.progressLog.scrollTop = el.progressLog.scrollHeight;
+}
+
+function setFooter(msg, cls){
+  el.progressFooter.textContent = msg;
+  el.progressFooter.className = "progress-footer" + (cls ? " " + cls : "");
+}
+
+function init(){
+  Object.entries(COUNTRIES).forEach(([code, name]) => {
+    el.buyCountry.innerHTML  += `<option value="${code}">${name}</option>`;
+    el.sellCountry.innerHTML += `<option value="${code}">${name}</option>`;
+  });
+  el.buyCountry.value  = "LT";
+  el.sellCountry.value = "DE";
+  el.makeList.innerHTML = MAKES.map(x => `<option value="${x}"></option>`).join("");
+}
+
+function km(v){ return v ? Number(v).toLocaleString("en-US") + " km" : "—"; }
+
+function renderSavedSearches(){
+  const list = JSON.parse(localStorage.getItem('marketSavedSearches') || '[]');
+  if (!list.length) { el.savedSearches.innerHTML = ''; return; }
+  el.savedSearches.innerHTML = '<div class="saved-row"><strong>Saved searches</strong>' + list.map((item, idx)=>`<button type="button" class="mini-btn" data-load-search="${idx}">${item.name}</button>`).join('') + '</div>';
+}
+
+function applyRowFilters(rows){
+  const blacklist = new Set(loadBlacklist());
+  const minListings = Number(el.minListings.value || 1);
+  return rows.filter(r => !blacklist.has(rowKey(r)) && Math.min(Number(r.buyCount||0), Number(r.sellCount||0)) >= minListings);
+}
+
+function render(data){
+  let rows = applyRowFilters(data.models || []);
+  latestRows = rows;
+  el.buyCount.textContent   = String(data.buyListingCount  || 0);
+  el.sellCount.textContent  = String(data.sellListingCount || 0);
+  el.modelCount.textContent = String(rows.length || 0);
+  el.statusTop.textContent  = rows.length ? t("statusDone") : t("statusNoModels");
+
+  if (data.errors && data.errors.length) {
+    el.errors.innerHTML = data.errors.map(e => `<div class="errorMsg">⚠️ ${e}</div>`).join("");
+  } else {
+    el.errors.innerHTML = "";
+  }
+
+  if (!rows.length) {
+    el.resultsBody.innerHTML = `<tr><td colspan="10" class="empty">${t('noMatchedModels')}</td></tr>`;
+    return;
+  }
+
+  const costs = totalCosts();
+  rows = rows.sort((a,b)=> (b.difference - costs) - (a.difference - costs));
+  latestRows = rows;
+  el.resultsBody.innerHTML = rows.map(r => {
+    const spec = [
+      r.repYear    ? r.repYear              : null,
+      r.repFuel    ? r.repFuel              : null,
+      r.repGearbox ? r.repGearbox           : null,
+      r.repMileage ? "~" + km(r.repMileage) : null,
+    ].filter(Boolean).join(" · ") || "—";
+    const net = (Number(r.difference||0) - costs);
+    return `
+    <tr>
+      <td><strong>${r.model}</strong> <span class="muted">${[r.repYear, r.repBracket ? r.repBracket+" km" : null].filter(Boolean).join(" · ")}</span></td>
+      <td>${money(r.buyAverage)}</td>
+      <td>${money(r.sellAverage)}</td>
+      <td class="${r.difference >= 0 ? "good" : "bad"}">${r.difference >= 0 ? "+" : ""}${money(r.difference)}</td>
+      <td class="${net >= 0 ? "good" : "bad"}">${net >= 0 ? "+" : ""}${money(net)}</td>
+      <td><span class="${confidenceClass(r.confidence||0)}">${Math.round(r.confidence||0)}%</span></td>
+      <td>${verifiedBadge(r)}</td>
+      <td class="spec-cell">${spec}</td>
+      <td>
+        <div class="links">
+          <a href="${r.buySearchUrl}" target="_blank" rel="noopener noreferrer">${t("buyLink")}</a>
+          <a href="${r.sellSearchUrl}" target="_blank" rel="noopener noreferrer">${t("sellLink")}</a>
+          <a href="#" class="open-both" data-buy="${encodeURIComponent(r.buySearchUrl)}" data-sell="${encodeURIComponent(r.sellSearchUrl)}">Both</a>
+        </div>
+      </td>
+      <td><button class="mini-btn blacklist-btn" data-key="${encodeURIComponent(rowKey(r))}">Hide</button></td>
+    </tr>`;
+  }).join("");
+}
+
+async function runScan(){
+  const payload = {
+    buyCountry:  el.buyCountry.value,
+    sellCountry: el.sellCountry.value,
+    make:        el.make.value.trim(),
+    model:       el.model.value.trim(),
+    year:        el.year.value.trim(),
+    fuel:        el.fuel.value,
+    gearbox:     el.gearbox.value,
+    drive:       el.drive.value,
+    priceFrom:   el.priceFrom.value.trim(),
+    priceTo:     el.priceTo.value.trim(),
+    maxPages:    Number(el.maxPages.value || 20),
+    speedMode:   el.speedMode.value,
+    minListings: Number(el.minListings.value || 1),
+    blacklist:   loadBlacklist()
+  };
+
+  if (!payload.make) {
+    logLine(t("makeRequired"), "log-error");
+    el.statusTop.textContent = t("statusMakeRequired");
+    return;
+  }
+  if (payload.buyCountry === payload.sellCountry) {
+    logLine(t("countriesDifferent"), "log-error");
+    el.statusTop.textContent = t("statusInvalid");
+    return;
+  }
+
+  el.scanBtn.disabled = true;
+  el.scanBtn.textContent = t("compareBtnBusy");
+  el.statusTop.textContent = t("statusScanning");
+  el.buyCount.textContent = "—";
+  el.sellCount.textContent = "—";
+  el.modelCount.textContent = "—";
+  el.errors.innerHTML = "";
+  el.resultsBody.innerHTML = `<tr><td colspan="10" class="empty">${t('scanningPleaseWait')}</td></tr>`;
+  setFooter(t('runningFooter'), "footer-running");
+
+  logLine(I18N[currentLang].startSummary(payload.make, COUNTRIES[payload.buyCountry], COUNTRIES[payload.sellCountry], payload.maxPages), "log-start");
+
+  try {
+    const res = await fetch("/api/compare-make", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      let msg = `Server error ${res.status}`;
+      try { const d = await res.json(); msg = d.status || d.message || msg; } catch {}
+      logLine(msg, "log-error");
+      el.statusTop.textContent = t("statusError");
+      el.resultsBody.innerHTML = `<tr><td colspan="10" class="empty">${msg}</td></tr>`;
+      setFooter(t("failedFooter"), "footer-error");
+      return;
+    }
+
+    // Read SSE stream
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE frames
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop(); // last incomplete frame stays in buffer
+
+      for (const frame of frames) {
+        if (!frame.trim()) continue;
+        let eventType = "message";
+        let dataStr = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+          if (line.startsWith("data: "))  dataStr  = line.slice(6).trim();
+        }
+        if (!dataStr) continue;
+        let parsed;
+        try { parsed = JSON.parse(dataStr); } catch { continue; }
+
+        if (eventType === "progress") {
+          const msg = parsed.message || "";
+          const isErr = /error/i.test(msg);
+          const isDone = /complete|done/i.test(msg);
+          logLine(msg, isErr ? "log-error" : isDone ? "log-done" : "");
+        } else if (eventType === "result") {
+          result = parsed;
+        } else if (eventType === "error") {
+          logLine(t("serverError") + ": " + (parsed.message || "unknown"), "log-error");
+        }
+      }
+    }
+
+    if (result) {
+      render(result);
+      const hasModels = (result.models || []).length > 0;
+      setFooter(
+        I18N[currentLang].doneSummary(result.buyListingCount || 0, result.sellListingCount || 0, (result.models||[]).length),
+        hasModels ? "footer-done" : "footer-warn"
+      );
+      logLine(I18N[currentLang].finishedSummary(result.buyListingCount||0, result.sellListingCount||0, (result.models||[]).length), "log-done");
+    } else {
+      logLine(t("noResultReceived"), "log-error");
+      setFooter(t("noResultFooter"), "footer-error");
+    }
+  } catch (err) {
+    logLine(t("fetchError") + " " + err.message, "log-error");
+    el.statusTop.textContent = t("statusError");
+    el.resultsBody.innerHTML = `<tr><td colspan="10" class="empty">${err.message}</td></tr>`;
+    setFooter(t("errorFooter"), "footer-error");
+  } finally {
+    el.scanBtn.disabled = false;
+    el.scanBtn.textContent = t("compareBtn");
+  }
+}
+
+function reset(){
+  el.buyCountry.value  = "LT";
+  el.sellCountry.value = "DE";
+  el.make.value = el.model.value = el.year.value = "";
+  el.fuel.value = el.gearbox.value = el.drive.value = "";
+  el.priceFrom.value = el.priceTo.value = "";
+  el.maxPages.value = "20";
+  el.speedMode.value = "balanced";
+  el.minListings.value = "2";
+  el.transportCost.value = el.registrationCost.value = el.feesCost.value = el.repairCost.value = "0";
+  el.buyCount.textContent = el.sellCount.textContent = el.modelCount.textContent = "—";
+  el.statusTop.textContent = t("statusReady");
+  el.errors.innerHTML = "";
+  el.resultsBody.innerHTML = `<tr><td colspan="10" class="empty">${t('runComparison')}</td></tr>`;
+  setFooter("", "");
+}
+
+el.scanBtn.addEventListener("click", runScan);
+el.resetBtn.addEventListener("click", reset);
+el.clearLogBtn.addEventListener("click", () => {
+  el.progressLog.innerHTML = `<div class="log-idle">${t('logCleared')}</div>`;
+  logCount = 0;
+  setFooter("", "");
+});
+el.langToggle.addEventListener("click", () => {
+  setLanguage(currentLang === "ru" ? "en" : "ru");
+  reset();
+  renderSavedSearches();
+});
+
+el.saveSearchBtn.addEventListener("click", () => {
+  const list = JSON.parse(localStorage.getItem('marketSavedSearches') || '[]');
+  const payload = {
+    name: [el.make.value.trim(), el.model.value.trim(), el.buyCountry.value, el.sellCountry.value].filter(Boolean).join(' · '),
+    buyCountry: el.buyCountry.value, sellCountry: el.sellCountry.value, make: el.make.value.trim(), model: el.model.value.trim(), year: el.year.value.trim(),
+    fuel: el.fuel.value, gearbox: el.gearbox.value, drive: el.drive.value, maxPages: el.maxPages.value, speedMode: el.speedMode.value, minListings: el.minListings.value,
+    transportCost: el.transportCost.value, registrationCost: el.registrationCost.value, feesCost: el.feesCost.value, repairCost: el.repairCost.value
+  };
+  list.unshift(payload);
+  localStorage.setItem('marketSavedSearches', JSON.stringify(list.slice(0,12)));
+  renderSavedSearches();
+});
+
+el.savedSearches.addEventListener('click', (e) => {
+  const idx = e.target.getAttribute('data-load-search');
+  if (idx == null) return;
+  const list = JSON.parse(localStorage.getItem('marketSavedSearches') || '[]');
+  const item = list[Number(idx)];
+  if (!item) return;
+  Object.keys(item).forEach((k) => { if (el[k]) el[k].value = item[k]; });
+});
+
+el.exportBtn.addEventListener('click', () => {
+  if (!latestRows.length) return;
+  const costs = totalCosts();
+  const header = ['Model','Year','Fuel','Gearbox','BuyAvgEUR','SellAvgEUR','DifferenceEUR','NetEUR','Confidence','Verified','BuyURL','SellURL'];
+  const lines = [header.join(',')].concat(latestRows.map(r => [r.model,r.repYear||'',r.repFuel||'',r.repGearbox||'',r.buyAverage,r.sellAverage,r.difference,r.difference-costs,Math.round(r.confidence||0),r.liveVerified?'Yes':(r.liveVerifiedBuy||r.liveVerifiedSell?'Partial':'Sampled'),r.buySearchUrl,r.sellSearchUrl].map(v => '"'+String(v).replaceAll('"','""')+'"').join(',')));
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'market-comparison.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+document.addEventListener('click', (e) => {
+  const both = e.target.closest('.open-both');
+  if (both) {
+    e.preventDefault();
+    window.open(decodeURIComponent(both.dataset.buy), '_blank');
+    window.open(decodeURIComponent(both.dataset.sell), '_blank');
+  }
+  const hide = e.target.closest('.blacklist-btn');
+  if (hide) {
+    const set = new Set(loadBlacklist());
+    set.add(decodeURIComponent(hide.dataset.key));
+    saveBlacklist([...set]);
+    if (latestRows.length) render({models: latestRows, buyListingCount: el.buyCount.textContent, sellListingCount: el.sellCount.textContent, errors: []});
+  }
+});
+
+['transportCost','registrationCost','feesCost','repairCost','minListings'].forEach(id => el[id].addEventListener('input', () => {
+  if (latestRows.length) render({models: latestRows, buyListingCount: el.buyCount.textContent, sellListingCount: el.sellCount.textContent, errors: []});
+}));
+
+init();
+setLanguage(currentLang);
+reset();
+renderSavedSearches();
+</script>
+</body>
+</html>
